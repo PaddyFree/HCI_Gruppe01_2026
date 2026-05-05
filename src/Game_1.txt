@@ -1,0 +1,879 @@
+/*
+
+import { useEffect, useMemo, useState } from "react";
+
+const CONDITIONS = [
+    { type: "feature_color", label: "Feature: roter Kreis" },
+    { type: "feature_orientation", label: "Feature: vertikale Linie" },
+    { type: "conjunction", label: "Konjunktion: roter Kreis" }
+];
+
+const DIFFICULTIES = [
+    {
+        level: "leicht",
+        gridSize: 9,
+        buttonSize: 70,
+        targetSize: 30,
+        gap: 16,
+        colorDistractor: "blue",
+        lineThickness: 6
+    },
+    {
+        level: "mittel",
+        gridSize: 16,
+        buttonSize: 58,
+        targetSize: 24,
+        gap: 10,
+        colorDistractor: "royalblue",
+        lineThickness: 5
+    },
+    {
+        level: "schwer",
+        gridSize: 25,
+        buttonSize: 46,
+        targetSize: 18,
+        gap: 6,
+        colorDistractor: "slateblue",
+        lineThickness: 4
+    }
+];
+
+const INPUT_METHODS = ["Maus", "Touchpad", "Touchdisplay"];
+const TRIALS_PER_INPUT_METHOD = 12;
+
+function getRandomElement(array) {
+    return array[Math.floor(Math.random() * array.length)];
+}
+
+function shuffleArray(array) {
+    const copy = [...array];
+
+    for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+
+    return copy;
+}
+
+function generateTrial() {
+    const condition = getRandomElement(CONDITIONS);
+    const difficulty = getRandomElement(DIFFICULTIES);
+    const size = difficulty.gridSize;
+    const targetIndex = Math.floor(Math.random() * size);
+    const items = [];
+
+    for (let i = 0; i < size; i++) {
+        const isTarget = i === targetIndex;
+
+        if (condition.type === "feature_color") {
+            items.push({
+                shape: "circle",
+                color: isTarget ? "red" : difficulty.colorDistractor,
+                isTarget
+            });
+        }
+
+        if (condition.type === "feature_orientation") {
+            items.push({
+                shape: "line",
+                orientation: isTarget ? "vertical" : "horizontal",
+                thickness: difficulty.lineThickness,
+                isTarget
+            });
+        }
+
+        if (condition.type === "conjunction") {
+            if (isTarget) {
+                items.push({
+                    shape: "circle",
+                    color: "red",
+                    isTarget: true
+                });
+            } else {
+                const distractorTypes = [
+                    { shape: "circle", color: difficulty.colorDistractor },
+                    { shape: "square", color: "red" },
+                    { shape: "square", color: difficulty.colorDistractor }
+                ];
+
+                const distractor = getRandomElement(distractorTypes);
+
+                items.push({
+                    shape: distractor.shape,
+                    color: distractor.color,
+                    isTarget: false
+                });
+            }
+        }
+    }
+
+    return {
+        condition,
+        difficulty,
+        size,
+        items
+    };
+}
+
+function getInputStats(results, inputMethod) {
+    const methodResults = results.filter(
+        (r) => r.assignedInputMethod === inputMethod
+    );
+    const correctTrials = methodResults.filter((r) => r.correct);
+    const errors = methodResults.filter((r) => !r.correct).length;
+
+    const avgTime =
+        correctTrials.reduce((sum, r) => sum + r.reactionTime, 0) /
+        correctTrials.length || 0;
+
+    const accuracy = correctTrials.length / methodResults.length || 0;
+
+    const difficultyStats = DIFFICULTIES.map((difficulty) => {
+        const levelResults = methodResults.filter(
+            (r) => r.difficulty === difficulty.level
+        );
+        const levelCorrect = levelResults.filter((r) => r.correct);
+        const levelErrors = levelResults.filter((r) => !r.correct).length;
+
+        const levelAvgTime =
+            levelCorrect.reduce((sum, r) => sum + r.reactionTime, 0) /
+            levelCorrect.length || 0;
+
+        const levelAccuracy = levelCorrect.length / levelResults.length || 0;
+
+        return {
+            level: difficulty.level,
+            total: levelResults.length,
+            errors: levelErrors,
+            accuracy: levelAccuracy,
+            avgTime: levelAvgTime
+        };
+    });
+
+    return {
+        inputMethod,
+        total: methodResults.length,
+        errors,
+        accuracy,
+        avgTime,
+        difficultyStats
+    };
+}
+
+export default function App() {
+    const [inputOrder, setInputOrder] = useState([]);
+    const [phase, setPhase] = useState("intro");
+    const [currentInputIndex, setCurrentInputIndex] = useState(0);
+    const [trialInBlock, setTrialInBlock] = useState(0);
+    const [trial, setTrial] = useState(null);
+    const [startTime, setStartTime] = useState(null);
+    const [trialPhase, setTrialPhase] = useState("ready");
+    const [results, setResults] = useState([]);
+    const [resultsView, setResultsView] = useState("summary");
+    const [filterInputMethod, setFilterInputMethod] = useState("Alle");
+    const [filterDifficulty, setFilterDifficulty] = useState("Alle");
+    const [filterCondition, setFilterCondition] = useState("Alle");
+    const [filterCorrectness, setFilterCorrectness] = useState("Alle");
+    const [sortBy, setSortBy] = useState("trial_asc");
+
+    useEffect(() => {
+        setInputOrder(shuffleArray(INPUT_METHODS));
+    }, []);
+
+    const currentInputMethod = inputOrder[currentInputIndex] || null;
+    const totalTrials = INPUT_METHODS.length * TRIALS_PER_INPUT_METHOD;
+    const totalCompletedTrials = results.length;
+
+    const summaryStats = useMemo(() => {
+        return INPUT_METHODS.map((method) => getInputStats(results, method));
+    }, [results]);
+
+    const filteredAndSortedResults = useMemo(() => {
+        let filteredResults = [...results];
+
+        if (filterInputMethod !== "Alle") {
+            filteredResults = filteredResults.filter(
+                (entry) => entry.assignedInputMethod === filterInputMethod
+            );
+        }
+
+        if (filterDifficulty !== "Alle") {
+            filteredResults = filteredResults.filter(
+                (entry) => entry.difficulty === filterDifficulty
+            );
+        }
+
+        if (filterCondition !== "Alle") {
+            filteredResults = filteredResults.filter(
+                (entry) => entry.conditionLabel === filterCondition
+            );
+        }
+
+        if (filterCorrectness !== "Alle") {
+            filteredResults = filteredResults.filter((entry) =>
+                filterCorrectness === "Korrekt" ? entry.correct : !entry.correct
+            );
+        }
+
+        filteredResults.sort((a, b) => {
+            if (sortBy === "trial_asc") return a.trialNumber - b.trialNumber;
+            if (sortBy === "trial_desc") return b.trialNumber - a.trialNumber;
+            if (sortBy === "time_asc") return a.reactionTime - b.reactionTime;
+            if (sortBy === "time_desc") return b.reactionTime - a.reactionTime;
+            return 0;
+        });
+
+        return filteredResults;
+    }, [
+        results,
+        filterInputMethod,
+        filterDifficulty,
+        filterCondition,
+        filterCorrectness,
+        sortBy
+    ]);
+
+    function startBlock() {
+        const newTrial = generateTrial();
+        setTrial(newTrial);
+        setStartTime(null);
+        setTrialPhase("ready");
+        setPhase("trial");
+    }
+
+    function revealTrialGrid() {
+        setStartTime(Date.now());
+        setTrialPhase("active");
+    }
+
+    function handleStartExperiment() {
+        setCurrentInputIndex(0);
+        setTrialInBlock(0);
+        setResults([]);
+        setTrial(null);
+        setStartTime(null);
+        setTrialPhase("ready");
+        setResultsView("summary");
+        setFilterInputMethod("Alle");
+        setFilterDifficulty("Alle");
+        setFilterCondition("Alle");
+        setFilterCorrectness("Alle");
+        setSortBy("trial_asc");
+        setPhase("blockIntro");
+    }
+
+    function moveToNextStep() {
+        const nextTrialInBlock = trialInBlock + 1;
+
+        if (nextTrialInBlock < TRIALS_PER_INPUT_METHOD) {
+            setTrialInBlock(nextTrialInBlock);
+
+            const newTrial = generateTrial();
+            setTrial(newTrial);
+            setStartTime(null);
+            setTrialPhase("ready");
+            setPhase("trial");
+            return;
+        }
+
+        const nextInputIndex = currentInputIndex + 1;
+
+        if (nextInputIndex < inputOrder.length) {
+            setCurrentInputIndex(nextInputIndex);
+            setTrialInBlock(0);
+            setPhase("blockIntro");
+            return;
+        }
+
+        setPhase("results");
+    }
+
+    function handleClick(item, event) {
+        if (!trial || startTime === null || trialPhase !== "active") {
+            return;
+        }
+
+        const reactionTime = Date.now() - startTime;
+        const correct = item.isTarget;
+        const actualPointerType = event.nativeEvent.pointerType || "unbekannt";
+
+        setResults((prev) => [
+            ...prev,
+            {
+                trialNumber: prev.length + 1,
+                reactionTime,
+                correct,
+                condition: trial.condition.type,
+                conditionLabel: trial.condition.label,
+                difficulty: trial.difficulty.level,
+                size: trial.size,
+                assignedInputMethod: currentInputMethod,
+                actualPointerType
+            }
+        ]);
+
+        moveToNextStep();
+    }
+
+    if (inputOrder.length === 0) {
+        return <div>Loading...</div>;
+    }
+
+    if (phase === "intro") {
+        return (
+            <div
+                style={{
+                    minHeight: "100vh",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexDirection: "column",
+                    padding: 24,
+                    boxSizing: "border-box",
+                    textAlign: "center",
+                    gap: 16,
+                    maxWidth: 900,
+                    margin: "0 auto"
+                }}
+            >
+                <h1 style={{fontSize: 36}}>Visuelle Suche: Maus, Touchpad, Touchdisplay</h1>
+                <p>
+                    Du testest alle drei Eingabearten genau einmal als eigenen Block. Die
+                    Reihenfolge ist zufällig.
+                </p>
+                <p>
+                    Zwischen den Blöcken erscheint jeweils ein Bildschirm, der dir sagt,
+                    welche Eingabeart jetzt dran ist.
+                </p>
+                <p>
+                    Wichtig: Touchpad lässt sich im Browser nicht zuverlässig automatisch
+                    von Maus unterscheiden. Deshalb wird die Eingabeart blockweise über
+                    den Anweisungsscreen festgelegt.
+                </p>
+                <p>Pro Eingabeart absolvierst du {TRIALS_PER_INPUT_METHOD} Trials.</p>
+                <button
+                    onClick={handleStartExperiment}
+                    style={{
+                        padding: "12px 24px",
+                        fontSize: 18,
+                        cursor: "pointer",
+                        borderRadius: 8,
+                        border: "1px solid #ccc",
+                        background: "grey"
+                    }}
+                >
+                    Experiment starten
+                </button>
+            </div>
+        );
+    }
+
+    if (phase === "blockIntro") {
+        return (
+            <div
+                style={{
+                    minHeight: "100vh",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexDirection: "column",
+                    padding: 24,
+                    boxSizing: "border-box",
+                    textAlign: "center",
+                    gap: 16
+                }}
+            >
+                <h1>Jetzt: {currentInputMethod}</h1>
+                <p>
+                    Nutze für den nächsten Block ausschließlich: <b>{currentInputMethod}</b>
+                </p>
+                <p>
+                    Block {currentInputIndex + 1} von {inputOrder.length} · Trial {trialInBlock + 1} von {TRIALS_PER_INPUT_METHOD}
+                </p>
+                <p>
+                    Gesamtfortschritt: {totalCompletedTrials} von {totalTrials} Trials
+                </p>
+                <button
+                    onClick={startBlock}
+                    style={{
+                        padding: "12px 24px",
+                        fontSize: 18,
+                        cursor: "pointer",
+                        borderRadius: 8,
+                        border: "1px solid #ccc",
+                        background: "grey"
+                    }}
+                >
+                    Weiter
+                </button>
+            </div>
+        );
+    }
+
+    if (phase === "results") {
+        if (resultsView === "details") {
+            return (
+                <div
+                    style={{
+                        minHeight: "100vh",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "flex-start",
+                        flexDirection: "column",
+                        padding: 24,
+                        boxSizing: "border-box",
+                        gap: 20
+                    }}
+                >
+                    <h1>Trial-Details</h1>
+
+                    <button
+                        onClick={() => setResultsView("summary")}
+                        style={{
+                            padding: "10px 20px",
+                            fontSize: 16,
+                            cursor: "pointer",
+                            borderRadius: 8,
+                            border: "1px solid #ccc",
+                            background: "grey"
+                        }}
+                    >
+                        Zurück zur Ergebnisübersicht
+                    </button>
+
+                    <div
+                        style={{
+                            display: "grid",
+                            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                            gap: 12,
+                            width: "100%",
+                            maxWidth: 1200,
+                            background: "#f7f7f7",
+                            border: "1px solid #ddd",
+                            borderRadius: 10,
+                            padding: 16,
+                            boxSizing: "border-box"
+                        }}
+                    >
+                        <div>
+                            <label style={filterLabelStyle}>Eingabeart</label>
+                            <select
+                                value={filterInputMethod}
+                                onChange={(e) => setFilterInputMethod(e.target.value)}
+                                style={filterInputStyle}
+                            >
+                                <option value="Alle">Alle</option>
+                                {INPUT_METHODS.map((method) => (
+                                    <option key={method} value={method}>
+                                        {method}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label style={filterLabelStyle}>Schwierigkeit</label>
+                            <select
+                                value={filterDifficulty}
+                                onChange={(e) => setFilterDifficulty(e.target.value)}
+                                style={filterInputStyle}
+                            >
+                                <option value="Alle">Alle</option>
+                                {DIFFICULTIES.map((difficulty) => (
+                                    <option key={difficulty.level} value={difficulty.level}>
+                                        {difficulty.level}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label style={filterLabelStyle}>Bedingung</label>
+                            <select
+                                value={filterCondition}
+                                onChange={(e) => setFilterCondition(e.target.value)}
+                                style={filterInputStyle}
+                            >
+                                <option value="Alle">Alle</option>
+                                {CONDITIONS.map((condition) => (
+                                    <option key={condition.type} value={condition.label}>
+                                        {condition.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label style={filterLabelStyle}>Korrektheit</label>
+                            <select
+                                value={filterCorrectness}
+                                onChange={(e) => setFilterCorrectness(e.target.value)}
+                                style={filterInputStyle}
+                            >
+                                <option value="Alle">Alle</option>
+                                <option value="Korrekt">Korrekt</option>
+                                <option value="Fehler">Fehler</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label style={filterLabelStyle}>Sortierung</label>
+                            <select
+                                value={sortBy}
+                                onChange={(e) => setSortBy(e.target.value)}
+                                style={filterInputStyle}
+                            >
+                                <option value="trial_asc">Trial aufsteigend</option>
+                                <option value="trial_desc">Trial absteigend</option>
+                                <option value="time_asc">Reaktionszeit aufsteigend</option>
+                                <option value="time_desc">Reaktionszeit absteigend</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <p style={{ margin: 0, color: "#333" }}>
+                        Angezeigte Trials: {filteredAndSortedResults.length} von {results.length}
+                    </p>
+
+                    <div
+                        style={{
+                            width: "100%",
+                            maxWidth: 1200,
+                            overflowX: "auto",
+                            background: "white",
+                            border: "1px solid #ccc",
+                            borderRadius: 10,
+                            padding: 12
+                        }}
+                    >
+                        <table
+                            style={{
+                                width: "100%",
+                                borderCollapse: "collapse",
+                                color: "black"
+                            }}
+                        >
+                            <thead>
+                            <tr>
+                                <th style={tableHeaderStyle}>Trial</th>
+                                <th style={tableHeaderStyle}>Eingabeart</th>
+                                <th style={tableHeaderStyle}>PointerType</th>
+                                <th style={tableHeaderStyle}>Bedingung</th>
+                                <th style={tableHeaderStyle}>Schwierigkeit</th>
+                                <th style={tableHeaderStyle}>Grid</th>
+                                <th style={tableHeaderStyle}>Reaktionszeit</th>
+                                <th style={tableHeaderStyle}>Korrekt</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {filteredAndSortedResults.map((entry) => (
+                                <tr key={entry.trialNumber}>
+                                    <td style={tableCellStyle}>{entry.trialNumber}</td>
+                                    <td style={tableCellStyle}>{entry.assignedInputMethod}</td>
+                                    <td style={tableCellStyle}>{entry.actualPointerType}</td>
+                                    <td style={tableCellStyle}>{entry.conditionLabel}</td>
+                                    <td style={tableCellStyle}>{entry.difficulty}</td>
+                                    <td style={tableCellStyle}>{entry.size}</td>
+                                    <td style={tableCellStyle}>{entry.reactionTime} ms</td>
+                                    <td
+                                        style={{
+                                            ...tableCellStyle,
+                                            color: entry.correct ? "green" : "red",
+                                            fontWeight: 600
+                                        }}
+                                    >
+                                        {entry.correct ? "Ja" : "Nein"}
+                                    </td>
+                                </tr>
+                            ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            );
+        }
+
+        return (
+            <div
+                style={{
+                    minHeight: "100vh",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexDirection: "column",
+                    padding: 24,
+                    boxSizing: "border-box",
+                    gap: 20
+                }}
+            >
+                <h1>Ergebnisse</h1>
+
+                <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                    <button
+                        onClick={() => setResultsView("details")}
+                        style={{
+                            padding: "10px 20px",
+                            fontSize: 16,
+                            cursor: "pointer",
+                            borderRadius: 8,
+                            border: "1px solid #ccc",
+                            background: "grey"
+                        }}
+                    >
+                        Alle Trial-Details anzeigen
+                    </button>
+                </div>
+
+                <div
+                    style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 18,
+                        width: "100%",
+                        maxWidth: 900
+                    }}
+                >
+                    {summaryStats.map((entry) => (
+                        <div
+                            key={entry.inputMethod}
+                            style={{
+                                border: "1px solid #ccc",
+                                borderRadius: 10,
+                                padding: 18,
+                                background: "grey",
+                                color: "black"
+                            }}
+                        >
+                            <h2 style={{ marginTop: 0 }}>{entry.inputMethod}</h2>
+                            <p style={{ margin: "6px 0" }}>Trials: {entry.total}</p>
+                            <p
+                                style={{
+                                    margin: "6px 0",
+                                    color: entry.errors > 2 ? "red" : "black"
+                                }}
+                            >
+                                Fehler: {entry.errors}
+                            </p>
+                            <p
+                                style={{
+                                    margin: "6px 0",
+                                    color: entry.accuracy > 0.8 ? "greenyellow" : "orangered"
+                                }}
+                            >
+                                Trefferquote: {(entry.accuracy * 100).toFixed(1)}%
+                            </p>
+                            <p
+                                style={{
+                                    margin: "6px 0 16px 0",
+                                    color: entry.avgTime > 900 ? "orange" : "black"
+                                }}
+                            >
+                                Ø Reaktionszeit: {Math.round(entry.avgTime)} ms
+                            </p>
+
+                            <h3 style={{ marginBottom: 10 }}>Nach Schwierigkeit</h3>
+                            <div
+                                style={{
+                                    display: "grid",
+                                    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                                    gap: 12
+                                }}
+                            >
+                                {entry.difficultyStats.map((difficultyEntry) => (
+                                    <div
+                                        key={difficultyEntry.level}
+                                        style={{
+                                            border: "1px solid #e0e0e0",
+                                            borderRadius: 8,
+                                            padding: 12,
+                                            background: "#fafafa"
+                                        }}
+                                    >
+                                        <h4 style={{ marginTop: 0, marginBottom: 8 }}>
+                                            {difficultyEntry.level}
+                                        </h4>
+                                        <p style={{ margin: "4px 0" }}>
+                                            Trials: {difficultyEntry.total}
+                                        </p>
+                                        <p style={{ margin: "4px 0" }}>
+                                            Fehler: {difficultyEntry.errors}
+                                        </p>
+                                        <p style={{ margin: "4px 0" }}>
+                                            Trefferquote: {(difficultyEntry.accuracy * 100).toFixed(1)}%
+                                        </p>
+                                        <p style={{ margin: "4px 0" }}>
+                                            Ø Reaktionszeit: {Math.round(difficultyEntry.avgTime)} ms
+                                        </p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div
+            style={{
+                minHeight: "100vh",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexDirection: "column",
+                gap: 20,
+                padding: 24,
+                boxSizing: "border-box"
+            }}
+        >
+            <div style={{ textAlign: "center" }}>
+                <h2 style={{ marginBottom: 8 }}>{trial.condition.label}</h2>
+                <p style={{ margin: 4 }}>
+                    Eingabeart dieses Blocks: {currentInputMethod}
+                </p>
+                <p style={{ margin: 4 }}>Schwierigkeit: {trial.difficulty.level}</p>
+                <p style={{ margin: 4 }}>
+                    Block {currentInputIndex + 1} von {inputOrder.length} · Trial {trialInBlock + 1} von {TRIALS_PER_INPUT_METHOD}
+                </p>
+                <p style={{ margin: 4 }}>
+                    Gesamtfortschritt: {totalCompletedTrials + 1} von {totalTrials}
+                </p>
+                <p style={{ margin: 4 }}>Finde das Ziel so schnell wie möglich</p>
+            </div>
+
+            {trialPhase === "ready" ? (
+                <div
+                    style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 16,
+                        padding: 24,
+                        minHeight: 280,
+                        minWidth: 320,
+                        border: "1px dashed #aaa",
+                        borderRadius: 10,
+                        background: "#f5f5f5"
+                    }}
+                >
+                    <p style={{ margin: 0, fontWeight: 600 }}>
+                        Ziel merken, dann starten.
+                    </p>
+                    <p style={{ margin: 0 }}>
+                        Das Raster ist noch verborgen. Die Zeit startet erst, wenn du auf den Button drückst.
+                    </p>
+                    <button
+                        onClick={revealTrialGrid}
+                        style={{
+                            padding: "12px 24px",
+                            fontSize: 16,
+                            cursor: "pointer",
+                            borderRadius: 8,
+                            border: "1px solid #ccc",
+                            background: "grey"
+                        }}
+                    >
+                        Feld anzeigen und Zeit starten
+                    </button>
+                </div>
+            ) : (
+                <div
+                    style={{
+                        display: "grid",
+                        gridTemplateColumns: `repeat(${Math.sqrt(trial.size)}, 1fr)`,
+                        gap: trial.difficulty.gap,
+                        justifyContent: "center"
+                    }}
+                >
+                    {trial.items.map((item, idx) => (
+                        <button
+                            key={idx}
+                            onPointerDown={(event) => handleClick(item, event)}
+                            style={{
+                                width: trial.difficulty.buttonSize,
+                                height: trial.difficulty.buttonSize,
+                                background: "grey",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                border: "1px solid #ccc",
+                                borderRadius: 6,
+                                cursor: "pointer",
+                                padding: 0
+                            }}
+                        >
+                            {item.shape === "circle" && (
+                                <div
+                                    style={{
+                                        width: trial.difficulty.targetSize,
+                                        height: trial.difficulty.targetSize,
+                                        borderRadius: "50%",
+                                        background: item.color
+                                    }}
+                                />
+                            )}
+
+                            {item.shape === "square" && (
+                                <div
+                                    style={{
+                                        width: trial.difficulty.targetSize,
+                                        height: trial.difficulty.targetSize,
+                                        background: item.color
+                                    }}
+                                />
+                            )}
+
+                            {item.shape === "line" && (
+                                <div
+                                    style={{
+                                        width:
+                                            item.orientation === "vertical"
+                                                ? item.thickness
+                                                : trial.difficulty.targetSize,
+                                        height:
+                                            item.orientation === "vertical"
+                                                ? trial.difficulty.targetSize
+                                                : item.thickness,
+                                        background: "black"
+                                    }}
+                                />
+                            )}
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+const tableHeaderStyle = {
+    borderBottom: "2px solid #ccc",
+    padding: "10px 8px",
+    textAlign: "left",
+    background: "#f0f0f0"
+};
+
+const tableCellStyle = {
+    borderBottom: "1px solid #e0e0e0",
+    padding: "8px"
+};
+
+const filterLabelStyle = {
+    display: "block",
+    marginBottom: 6,
+    fontWeight: 600,
+    color: "#333"
+};
+
+const filterInputStyle = {
+    width: "100%",
+    padding: "8px 10px",
+    borderRadius: 6,
+    border: "1px solid #bbb",
+    background: "grey",
+    boxSizing: "border-box"
+};
+*/
