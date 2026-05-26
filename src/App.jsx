@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import humSound from "./assets/Netzbrummen Simulation.wav";
 
 const FIELD_SIZES = [64];
@@ -263,57 +263,6 @@ function downloadCSV(results) {
     URL.revokeObjectURL(url);
 }
 
-function getSummary(results) {
-
-    const withHum = results.filter(
-        (entry) =>
-            entry.soundCondition ===
-            "mit_netzbrummen"
-    );
-
-    const withoutHum = results.filter(
-        (entry) =>
-            entry.soundCondition ===
-            "ohne_netzbrummen"
-    );
-
-    function buildStats(entries) {
-
-        const correctEntries =
-            entries.filter(
-                (entry) => entry.correct
-            );
-
-        const errors =
-            entries.filter(
-                (entry) => !entry.correct
-            ).length;
-
-        const avgTime =
-            correctEntries.reduce(
-                (sum, entry) =>
-                    sum + entry.reactionTime,
-                0
-            ) / correctEntries.length || 0;
-
-        const accuracy =
-            correctEntries.length /
-            entries.length || 0;
-
-        return {
-            total: entries.length,
-            errors,
-            accuracy,
-            avgTime
-        };
-    }
-
-    return {
-        withHum: buildStats(withHum),
-        withoutHum: buildStats(withoutHum)
-    };
-}
-
 export default function App() {
 
     const [phase, setPhase] =
@@ -403,12 +352,8 @@ export default function App() {
 
         return () => clearTimeout(timeout);
 
-    }, [phase]);
+    }, [experimentPlan, phase, trialIndex]);
 
-    const summary = useMemo(
-        () => getSummary(results),
-        [results]
-    );
 
     async function ensureAudioReady() {
 
