@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import humSound from "./assets/Netzbrummen Simulation.wav";
 
 const FIELD_SIZES = [64];
 const TRIALS_TOTAL = 80;
@@ -234,7 +233,7 @@ function downloadCSV(results) {
     const now = new Date();
 
     const fileName =
-        `HCI2-Experiment_${now.getFullYear()}-` +
+        `experiment_${now.getFullYear()}-` +
         `${String(now.getMonth() + 1).padStart(2, "0")}-` +
         `${String(now.getDate()).padStart(2, "0")}_` +
         `${String(now.getHours()).padStart(2, "0")}-` +
@@ -334,30 +333,28 @@ export default function App() {
     const [experimentPlan, setExperimentPlan] =
         useState([]);
 
-    const humAudioRef =
+    const audioContextRef =
+        useRef(null);
+
+    const humOscillatorRef =
+        useRef(null);
+
+    const humGainRef =
         useRef(null);
 
     useEffect(() => {
 
-        const audio =
-            new Audio(humSound);
-
-        audio.loop = true;
-
-        audio.volume = 0.35;
-
-        humAudioRef.current = audio;
-
         return () => {
 
-            if (humAudioRef.current) {
+            stopHum();
 
-                humAudioRef.current.pause();
+            if (audioContextRef.current) {
 
-                humAudioRef.current = null;
+                audioContextRef.current.close();
+
+                audioContextRef.current = null;
             }
         };
-
     }, []);
 
     // SOUND MANAGEMENT
@@ -372,11 +369,7 @@ export default function App() {
             "mit_netzbrummen"
         ) {
 
-            if (
-                humAudioRef.current &&
-                humAudioRef.current.paused
-            ) {
-
+            if (!humOscillatorRef.current) {
                 startHum();
             }
 
@@ -414,15 +407,23 @@ export default function App() {
 
         try {
 
-            if (!humAudioRef.current) {
-                return false;
+            if (!audioContextRef.current) {
+
+                const AudioContextClass =
+                    window.AudioContext ||
+                    window.webkitAudioContext;
+
+                audioContextRef.current =
+                    new AudioContextClass();
             }
 
-            await humAudioRef.current.play();
+            if (
+                audioContextRef.current.state ===
+                "suspended"
+            ) {
 
-            humAudioRef.current.pause();
-
-            humAudioRef.current.currentTime = 0;
+                await audioContextRef.current.resume();
+            }
 
             return true;
 
@@ -436,22 +437,94 @@ export default function App() {
 
     function startHum() {
 
-        if (!humAudioRef.current) {
-            return;
-        }
+        const audioContext =
+            audioContextRef.current;
 
-        humAudioRef.current.play();
+        if (!audioContext) return;
+
+        stopHum();
+
+        const fundamental =
+            audioContext.createOscillator();
+
+        const overtone1 =
+            audioContext.createOscillator();
+
+        const overtone2 =
+            audioContext.createOscillator();
+
+        const gain =
+            audioContext.createGain();
+
+        fundamental.type = "sine";
+        fundamental.frequency.value = 50;
+
+        overtone1.type = "sine";
+        overtone1.frequency.value = 100;
+
+        overtone2.type = "sine";
+        overtone2.frequency.value = 150;
+
+        gain.gain.value = 0.20;
+
+        fundamental.connect(gain);
+        overtone1.connect(gain);
+        overtone2.connect(gain);
+
+        gain.connect(
+            audioContext.destination
+        );
+
+        fundamental.start();
+        overtone1.start();
+        overtone2.start();
+
+        humOscillatorRef.current = {
+            fundamental,
+            overtone1,
+            overtone2
+        };
+
+        humGainRef.current = gain;
     }
 
     function stopHum() {
 
-        if (!humAudioRef.current) {
-            return;
+        if (humOscillatorRef.current) {
+
+            try {
+                humOscillatorRef.current
+                    .fundamental.stop();
+            } catch {}
+
+            try {
+                humOscillatorRef.current
+                    .overtone1.stop();
+            } catch {}
+
+            try {
+                humOscillatorRef.current
+                    .overtone2.stop();
+            } catch {}
+
+            humOscillatorRef.current
+                .fundamental.disconnect();
+
+            humOscillatorRef.current
+                .overtone1.disconnect();
+
+            humOscillatorRef.current
+                .overtone2.disconnect();
+
+            humOscillatorRef.current = null;
         }
 
-        humAudioRef.current.pause();
+        if (humGainRef.current) {
 
-        humAudioRef.current.currentTime = 0;
+            humGainRef.current.disconnect();
+
+            humGainRef.current = null;
+        }
     }
 
     function prepareNextTrial(
@@ -601,6 +674,13 @@ export default function App() {
                         Visuelle Suche
                     </h1>
 
+                    <p>
+                        Insgesamt:
+                        {" "}
+                        {TRIALS_TOTAL}
+                        {" "}
+                        Trials
+                    </p>
 
                     <button
                         onClick={
@@ -610,7 +690,6 @@ export default function App() {
                     >
                         Experiment starten
                     </button>
-
 
                 </div>
             </div>
@@ -631,6 +710,123 @@ export default function App() {
                     <h1>
                         Ergebnisse
                     </h1>
+
+                    <div
+                        style={
+                            summaryGridStyle
+                        }
+                    >
+
+                        <div
+                            style={
+                                summaryCardStyle
+                            }
+                        >
+
+                            <h2>
+                                Mit Netzbrummen
+                            </h2>
+
+                            <p>
+                                Trials:
+                                {" "}
+                                {
+                                    summary
+                                        .withHum
+                                        .total
+                                }
+                            </p>
+
+                            <p>
+                                Fehler:
+                                {" "}
+                                {
+                                    summary
+                                        .withHum
+                                        .errors
+                                }
+                            </p>
+
+                            <p>
+                                Trefferquote:
+                                {" "}
+                                {(
+                                    summary
+                                        .withHum
+                                        .accuracy *
+                                    100
+                                ).toFixed(1)}
+                                %
+                            </p>
+
+                            <p>
+                                Ø Zeit:
+                                {" "}
+                                {Math.round(
+                                    summary
+                                        .withHum
+                                        .avgTime
+                                )}
+                                ms
+                            </p>
+
+                        </div>
+
+                        <div
+                            style={
+                                summaryCardStyle
+                            }
+                        >
+
+                            <h2>
+                                Ohne Netzbrummen
+                            </h2>
+
+                            <p>
+                                Trials:
+                                {" "}
+                                {
+                                    summary
+                                        .withoutHum
+                                        .total
+                                }
+                            </p>
+
+                            <p>
+                                Fehler:
+                                {" "}
+                                {
+                                    summary
+                                        .withoutHum
+                                        .errors
+                                }
+                            </p>
+
+                            <p>
+                                Trefferquote:
+                                {" "}
+                                {(
+                                    summary
+                                        .withoutHum
+                                        .accuracy *
+                                    100
+                                ).toFixed(1)}
+                                %
+                            </p>
+
+                            <p>
+                                Ø Zeit:
+                                {" "}
+                                {Math.round(
+                                    summary
+                                        .withoutHum
+                                        .avgTime
+                                )}
+                                ms
+                            </p>
+
+                        </div>
+                    </div>
 
                     <table
                         style={tableStyle}
@@ -862,6 +1058,22 @@ const buttonStyle = {
     border: "1px solid #ccc",
     background: "black",
     color: "white"
+};
+
+const summaryGridStyle = {
+    display: "grid",
+    gridTemplateColumns:
+        "repeat(auto-fit, minmax(280px, 1fr))",
+    gap: 16,
+    marginBottom: 24
+};
+
+const summaryCardStyle = {
+    border: "1px solid #ddd",
+    borderRadius: 10,
+    padding: 16,
+    background: "#fafafa",
+    color: "black"
 };
 
 const tableStyle = {
