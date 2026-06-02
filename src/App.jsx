@@ -8,66 +8,51 @@ function getRandomElement(array) {
     return array[Math.floor(Math.random() * array.length)];
 }
 
-function createExperimentPlan() {
+function createExperimentPlan(group) {
 
-    const startWithPraeattentiv =
-        Math.random() < 0.5;
-
-    const firstSearchType =
-        startWithPraeattentiv
-            ? "praeattentiv"
-            : "attentiv";
-
-    const secondSearchType =
-        startWithPraeattentiv
-            ? "attentiv"
-            : "praeattentiv";
-
-    const firstAudioOrder =
-        Math.random() < 0.5
-            ? ["mit_netzbrummen", "ohne_netzbrummen"]
-            : ["ohne_netzbrummen", "mit_netzbrummen"];
-
-    const secondAudioOrder =
-        Math.random() < 0.5
-            ? ["mit_netzbrummen", "ohne_netzbrummen"]
-            : ["ohne_netzbrummen", "mit_netzbrummen"];
-
-    const blocks = [
-        {
-            searchType: firstSearchType,
-            soundCondition: firstAudioOrder[0],
-            count: 20
+    const CONDITIONS = {
+        1: {
+            searchType: "praeattentiv",
+            soundCondition: "mit_netzbrummen"
         },
-        {
-            searchType: firstSearchType,
-            soundCondition: firstAudioOrder[1],
-            count: 20
+        2: {
+            searchType: "praeattentiv",
+            soundCondition: "ohne_netzbrummen"
         },
-        {
-            searchType: secondSearchType,
-            soundCondition: secondAudioOrder[0],
-            count: 20
+        3: {
+            searchType: "attentiv",
+            soundCondition: "mit_netzbrummen"
         },
-        {
-            searchType: secondSearchType,
-            soundCondition: secondAudioOrder[1],
-            count: 20
+        4: {
+            searchType: "attentiv",
+            soundCondition: "ohne_netzbrummen"
         }
-    ];
+    };
+
+    const GROUPS = {
+        A: [1, 2, 3, 4],
+        B: [2, 1, 4, 3],
+        C: [3, 4, 1, 2],
+        D: [4, 3, 2, 1]
+    };
+
+    const order = GROUPS[group];
 
     const trials = [];
 
-    blocks.forEach((block) => {
+    order.forEach(conditionNumber => {
 
-        for (let i = 0; i < block.count; i++) {
+        const condition =
+            CONDITIONS[conditionNumber];
+
+        for (let i = 0; i < 20; i++) {
 
             trials.push({
-                soundCondition:
-                block.soundCondition,
-
                 searchType:
-                block.searchType
+                condition.searchType,
+
+                soundCondition:
+                condition.soundCondition
             });
         }
     });
@@ -82,15 +67,35 @@ function generateTrial(soundCondition, searchType) {
     const targetIndex =
         Math.floor(Math.random() * size);
 
-    const targetVariant =
-        Math.random() < 0.5
-            ? "targetA"
-            : "targetB";
-
     let items = [];
 
     // PRÄATTENTIV
     if (searchType === "praeattentiv") {
+
+        const possibleTargets = [
+
+            { color: "red", shape: "circle" },
+            { color: "green", shape: "circle" },
+            { color: "blue", shape: "circle" },
+
+            { color: "#666", shape: "square" },
+            { color: "red", shape: "square" },
+            { color: "green", shape: "square" },
+            { color: "blue", shape: "square" },
+
+            { color: "#666", shape: "triangle" },
+            { color: "red", shape: "triangle" },
+            { color: "green", shape: "triangle" },
+            { color: "blue", shape: "triangle" }
+        ];
+
+        const target =
+            possibleTargets[
+                Math.floor(
+                    Math.random() *
+                    possibleTargets.length
+                )
+                ];
 
         items = Array.from(
             { length: size },
@@ -98,21 +103,10 @@ function generateTrial(soundCondition, searchType) {
 
                 if (index === targetIndex) {
 
-                    // Roter Kreis
-                    if (targetVariant === "targetA") {
-
-                        return {
-                            isTarget: true,
-                            color: "red",
-                            shape: "circle"
-                        };
-                    }
-
-                    // Graues Quadrat
                     return {
                         isTarget: true,
-                        color: "#666",
-                        shape: "square"
+                        color: target.color,
+                        shape: target.shape
                     };
                 }
 
@@ -128,39 +122,136 @@ function generateTrial(soundCondition, searchType) {
     // ATTENTIV
     if (searchType === "attentiv") {
 
+        const colors = [
+            "red",
+            "green",
+            "blue"
+        ];
+
+        const shapes = [
+            "circle",
+            "square",
+            "triangle"
+        ];
+
+        // 2 verschiedene Farben
+        const colorA =
+            colors[
+                Math.floor(
+                    Math.random() * colors.length
+                )
+                ];
+
+        let colorB =
+            colors[
+                Math.floor(
+                    Math.random() * colors.length
+                )
+                ];
+
+        while (colorA === colorB) {
+
+            colorB =
+                colors[
+                    Math.floor(
+                        Math.random() * colors.length
+                    )
+                    ];
+        }
+
+        // 2 verschiedene Formen
+        const shapeA =
+            shapes[
+                Math.floor(
+                    Math.random() * shapes.length
+                )
+                ];
+
+        let shapeB =
+            shapes[
+                Math.floor(
+                    Math.random() * shapes.length
+                )
+                ];
+
+        while (shapeA === shapeB) {
+
+            shapeB =
+                shapes[
+                    Math.floor(
+                        Math.random() * shapes.length
+                    )
+                    ];
+        }
+
+        // verbleibende Form
+        const shapeC =
+            shapes.find(
+                shape =>
+                    shape !== shapeA &&
+                    shape !== shapeB
+            );
+
+        // Zieltyp
+        const targetType =
+            Math.random() < 0.5
+                ? "newShape"
+                : "swapCombination";
+
+        let target;
+
+        // Neues Dreieck / Quadrat / Kreis
+        if (targetType === "newShape") {
+
+            target =
+                Math.random() < 0.5
+                    ? {
+                        color: colorA,
+                        shape: shapeC
+                    }
+                    : {
+                        color: colorB,
+                        shape: shapeC
+                    };
+        }
+
+        // Farb-Form Kombination tauschen
+        else {
+
+            target =
+                Math.random() < 0.5
+                    ? {
+                        color: colorA,
+                        shape: shapeB
+                    }
+                    : {
+                        color: colorB,
+                        shape: shapeA
+                    };
+        }
+
         items = Array.from(
             { length: size },
             (_, index) => {
 
                 if (index === targetIndex) {
 
-                    // Roter Kreis
-                    if (targetVariant === "targetA") {
-
-                        return {
-                            isTarget: true,
-                            color: "red",
-                            shape: "circle"
-                        };
-                    }
-
-                    // Blaues Quadrat
                     return {
                         isTarget: true,
-                        color: "blue",
-                        shape: "square"
+                        color: target.color,
+                        shape: target.shape
                     };
                 }
 
                 const distractor =
                     Math.random() < 0.5
                         ? {
-                            color: "red",
-                            shape: "square"
+                            color: colorA,
+                            shape: shapeA
                         }
                         : {
-                            color: "blue",
-                            shape: "circle"
+                            color: colorB,
+                            shape: shapeB
                         };
 
                 return {
@@ -203,27 +294,44 @@ function formatSearchLabel(searchType) {
         : "Attentiv";
 }
 
-function downloadCSV(results) {
+function downloadCSV(
+    results,
+    group
+) {
 
     const headers = [
-        "trial",
-        "searchType",
-        "soundCondition",
-        "reactionTime",
-        "correct"
+        "Gruppe",
+        "Versuch",
+        "Suchtyp",
+        "AudioTyp",
+        "Reaktionszeit_ms",
+        "Korrekt"
     ];
 
     const rows = results.map((entry) => [
+
+        group,
+
         entry.trialNumber,
-        entry.searchType,
-        entry.soundCondition,
+
+        entry.searchType === "praeattentiv"
+            ? "Praeattentiv"
+            : "Attentiv",
+
+        entry.soundCondition === "mit_netzbrummen"
+            ? "Brummen"
+            : "Still",
+
         entry.reactionTime,
+
         entry.correct
+            ? 1
+            : 0
     ]);
 
     const csvContent = [
-        headers.join(","),
-        ...rows.map((row) => row.join(","))
+        headers.join(";"),
+        ...rows.map((row) => row.join(";"))
     ].join("\n");
 
     const blob = new Blob(
@@ -234,7 +342,8 @@ function downloadCSV(results) {
     const now = new Date();
 
     const fileName =
-        `HCI2-Experiment_${now.getFullYear()}-` +
+        `HCI2_Gruppe${group}_` +
+        `${now.getFullYear()}-` +
         `${String(now.getMonth() + 1).padStart(2, "0")}-` +
         `${String(now.getDate()).padStart(2, "0")}_` +
         `${String(now.getHours()).padStart(2, "0")}-` +
@@ -262,7 +371,55 @@ function downloadCSV(results) {
 
     URL.revokeObjectURL(url);
 }
+function renderShape(item, size) {
 
+    if (item.shape === "circle") {
+
+        return (
+            <div
+                style={{
+                    width: size,
+                    height: size,
+                    borderRadius: "50%",
+                    background: item.color
+                }}
+            />
+        );
+    }
+
+    if (item.shape === "square") {
+
+        return (
+            <div
+                style={{
+                    width: size,
+                    height: size,
+                    background: item.color
+                }}
+            />
+        );
+    }
+
+    if (item.shape === "triangle") {
+
+        return (
+            <div
+                style={{
+                    width: 0,
+                    height: 0,
+                    borderLeft:
+                        `${size / 2}px solid transparent`,
+                    borderRight:
+                        `${size / 2}px solid transparent`,
+                    borderBottom:
+                        `${size}px solid ${item.color}`
+                }}
+            />
+        );
+    }
+
+    return null;
+}
 export default function App() {
 
     const [phase, setPhase] =
@@ -282,6 +439,9 @@ export default function App() {
 
     const [experimentPlan, setExperimentPlan] =
         useState([]);
+
+    const [selectedGroup, setSelectedGroup] =
+        useState(null);
 
     const humAudioRef =
         useRef(null);
@@ -437,7 +597,9 @@ export default function App() {
         }
 
         const newExperimentPlan =
-            createExperimentPlan();
+            createExperimentPlan(
+                selectedGroup
+            );
 
         setExperimentPlan(
             newExperimentPlan
@@ -522,7 +684,10 @@ export default function App() {
 
             stopHum();
 
-            downloadCSV(nextResults);
+            downloadCSV(
+                nextResults,
+                selectedGroup
+            );
 
             setTrial(null);
 
@@ -546,16 +711,96 @@ export default function App() {
                         Visuelle Suche
                     </h1>
 
+                    <p
+                        style={{
+                            marginTop: 20,
+                            lineHeight: 1.6,
+                            textAlign: "center",
+                            opacity: 0.85
+                        }}
+                    >
+                        Diese Studie untersucht Reaktionszeiten und
+                        Genauigkeit bei visuellen Suchaufgaben unter
+                        unterschiedlichen Darstellungsbedingungen.
+                    </p>
+                    <br/>
+                    <div
+                        style={{
+                            display: "flex",
+                            gap: 10,
+                            marginBottom: 20,
+                            justifyContent: "center",
+                            flexWrap: "wrap"
+                        }}
+                    >
 
+                        {["A", "B", "C", "D"].map(group => (
+
+                            <button
+                                key={group}
+                                onClick={() =>
+                                    setSelectedGroup(group)
+                                }
+                                style={{
+                                    padding: "10px 20px",
+                                    cursor: "pointer",
+
+                                    background:
+                                        selectedGroup === group
+                                            ? "#4caf50"
+                                            : "#333",
+
+                                    color: "white",
+
+                                    border:
+                                        "1px solid #666",
+
+                                    borderRadius: 6
+                                }}
+                            >
+                                Gruppe {group}
+                            </button>
+
+                        ))}
+
+                    </div>
+                    <p>
+                        Ausgewählt:
+                        {" "}
+                        Gruppe {selectedGroup ?? "-"}
+                    </p>
+                    <br/>
                     <button
                         onClick={
                             handleStartExperiment
                         }
-                        style={buttonStyle}
+
+                        disabled={!selectedGroup}
+
+                        style={{
+                            ...buttonStyle,
+
+                            opacity:
+                                selectedGroup
+                                    ? 1
+                                    : 0.5
+                        }}
                     >
                         Experiment starten
                     </button>
 
+                    <p
+                        style={{
+                            marginTop: 40,
+                            fontSize: 12,
+                            opacity: 0.6,
+                            textAlign: "center"
+                        }}
+                    >
+                        © 2026 HCI1 Gruppe01 — Hochschule Flensburg
+                        <br />
+                        Forschungsprojekt zur visuellen Wahrnehmung
+                    </p>
 
                 </div>
             </div>
@@ -749,24 +994,10 @@ export default function App() {
                             }}
                         >
 
-                            <div
-                                style={{
-                                    width:
-                                    visuals.dotSize,
-
-                                    height:
-                                    visuals.dotSize,
-
-                                    borderRadius:
-                                        item.shape ===
-                                        "circle"
-                                            ? "50%"
-                                            : "0%",
-
-                                    background:
-                                    item.color
-                                }}
-                            />
+                            {renderShape(
+                                item,
+                                visuals.dotSize
+                            )}
 
                         </button>
                     )
