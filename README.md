@@ -1,99 +1,121 @@
-# Visuelle Suche Experiment (Netzbrummen vs. Kein Netzbrummen)
+# Visuelle Suche unter Netzbrummen
 
-Dieses Projekt ist eine webbasierte Anwendung zur Untersuchung visueller Suchprozesse unter verschiedenen auditiven Bedingungen.
-Teilnehmende müssen in einem Raster aus grauen Punkten möglichst schnell einen roten Zielpunkt identifizieren.
+Webanwendung zur Untersuchung des Einflusses von Netzbrummen auf präattentive und attentive visuelle Suchaufgaben.
 
-Ein Teil der Trials wird mit einem simulierten **Netzbrummen (50 Hz + Obertöne)** durchgeführt, ein anderer Teil ohne akustische Stimulation.
-
----
-
-## 🧠 Ziel des Experiments
-
-Untersuchung der Frage:
+## Forschungsfrage
 
 > Beeinflusst ein konstantes Hintergrundgeräusch (Netzbrummen) die Reaktionszeit und Genauigkeit bei visuellen Suchaufgaben?
 
 ---
 
-## ⚙️ Funktionsweise
+## Versuchsaufbau
 
-* Pro Durchlauf gibt es **24 Trials**
-* Gleichmäßige Verteilung:
+Jede Versuchsperson bearbeitet insgesamt **80 Trials**.
 
-    * 50% mit Netzbrummen
-    * 50% ohne Netzbrummen
-* Zufällige Feldgrößen:
+Unterschieden werden zwei Sucharten:
 
-    * 3×3, 4×4, 5×5, 6×6
-* In jedem Feld:
+* **Präattentiv:** Zielobjekt hebt sich direkt von den Distraktoren ab.
+* **Attentiv:** Zielobjekt muss durch Vergleich mehrerer Merkmale identifiziert werden.
 
-    * genau **ein roter Zielpunkt**
-    * restliche Punkte sind grau
+Zusätzlich gibt es zwei Audiobedingungen:
 
-### Ablauf eines Trials
+* Mit Netzbrummen
+* Ohne Netzbrummen
+
+---
+
+## Gruppen
+
+Zur Vermeidung von Reihenfolgeeffekten werden vier Gruppen verwendet.
+
+### Gruppe A
+
+1. Präattentiv + Brummen
+2. Präattentiv + Still
+3. Attentiv + Brummen
+4. Attentiv + Still
+
+### Gruppe B
+
+1. Präattentiv + Still
+2. Präattentiv + Brummen
+3. Attentiv + Still
+4. Attentiv + Brummen
+
+### Gruppe C
+
+1. Attentiv + Brummen
+2. Attentiv + Still
+3. Präattentiv + Brummen
+4. Präattentiv + Still
+
+### Gruppe D
+
+1. Attentiv + Still
+2. Attentiv + Brummen
+3. Präattentiv + Still
+4. Präattentiv + Brummen
+
+Jede Bedingung wird zweimal mit jeweils 10 Trials durchgeführt.
+
+Nach den ersten 40 Trials erfolgt automatisch eine 30-sekündige Pause.
+
+---
+
+## Ablauf eines Trials
 
 1. Fixationskreuz (1 Sekunde)
 2. Anzeige des Suchfeldes
-3. Nutzer klickt auf Zielpunkt
-4. Reaktionszeit wird gemessen
-5. nächstes Trial
+3. Zielobjekt auswählen
+4. Reaktionszeit messen
+5. Nächstes Trial
 
 ---
 
-## 🔊 Audio
-
-Das Netzbrummen wird über die Web Audio API erzeugt:
-
-* Grundfrequenz: **50 Hz**
-* Obertöne: **100 Hz, 150 Hz**
-* Leise Wiedergabe zur Simulation realer Umgebungsbedingungen
-
-Hinweis:
-Browser blockieren Audio ohne Benutzerinteraktion → wird beim Start aktiviert.
-
----
-
-## 📊 Erfasste Daten
+## Erfasste Daten
 
 Für jeden Trial werden gespeichert:
 
-* Feldgröße
-* Audio-Bedingung (mit / ohne Netzbrummen)
-* Reaktionszeit (ms)
-* Korrektheit (Treffer / Fehler)
+* Gruppe
+* Suchtyp
+* Audiobedingung
+* Reaktionszeit
+* Korrektheit
 
-Am Ende werden aggregierte Statistiken angezeigt:
+Nach Abschluss wird automatisch eine CSV-Datei exportiert.
 
-* Trefferquote
-* Fehleranzahl
+Zusätzlich werden pro Block berechnet:
+
+* Gesamtzeit
 * Durchschnittliche Reaktionszeit
+* Anzahl korrekter Antworten
 
 ---
 
-## 🧪 Technische Umsetzung
+## Technologien
 
-* React (Hooks)
-* Vite (Build-Tool)
-* Web Audio API (Soundgenerierung)
-* Inline CSS (kein externes Styling-Framework)
+* React
+* Vite
+* JavaScript
+* HTML Audio API
 
 ---
 
-## 🚀 Setup & Start
+## Start
 
-### 1. Installation
+Installation:
 
 ```bash
 npm install
 ```
 
-### 2. Entwicklungsserver starten
+Entwicklungsserver starten:
 
 ```bash
 npm run dev
 ```
 
-### 3. Build erstellen
+Produktionsbuild erstellen:
 
 ```bash
 npm run build
@@ -101,53 +123,10 @@ npm run build
 
 ---
 
-## ⚠️ Hinweise
+## Projekt
 
-* Audio funktioniert nur nach Nutzerinteraktion (Browser-Security)
-* Reaktionszeiten sind abhängig von:
+HCI1 – Hochschule Flensburg
 
-    * Hardware
-    * Eingabegerät
-    * Browser
+Sommersemester 2026
 
----
-
-## 🧩 Erweiterungsmöglichkeiten
-
-Mögliche nächste Schritte:
-
-* Randomisierte Fixationsdauer (800–1200 ms)
-* Vergleich verschiedener Eingabegeräte (Maus vs. Touch)
-* Export der Daten (CSV)
-* Erweiterte Visualisierung (Diagramme)
-
----
-
-## ⚛️ React + Vite Basis
-
-Dieses Projekt basiert auf einem minimalen React + Vite Setup mit HMR und ESLint.
-
-Offizielle Plugins:
-
-* [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) (Oxc)
-* [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) (SWC)
-
----
-
-## 🧹 ESLint & Codequalität
-
-Für produktive Anwendungen wird empfohlen:
-
-* TypeScript zu nutzen
-* type-aware linting zu aktivieren
-
-Mehr Infos:
-
-* https://typescript-eslint.io
-* https://react.dev/learn/react-compiler/installation
-
----
-
-## 📌 Fazit
-
-Das Projekt stellt eine einfache, aber kontrollierte Umgebung zur Untersuchung von Wahrnehmung und Reaktionsverhalten dar und eignet sich besonders für HCI-, Psychologie- oder UX-nahe Experimente.
+Untersuchung präattentiver und attentiver visueller Suchprozesse unter auditiver Belastung durch simuliertes Netzbrummen.

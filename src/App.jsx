@@ -40,20 +40,29 @@ function createExperimentPlan(group) {
 
     const trials = [];
 
-    order.forEach(conditionNumber => {
+    order.forEach(() => {
+        for (let round = 0; round < 2; round++) {
 
-        const condition =
-            CONDITIONS[conditionNumber];
+            order.forEach(conditionNumber => {
 
-        for (let i = 0; i < 20; i++) {
+                const condition =
+                    CONDITIONS[
+                        conditionNumber
+                        ];
 
-            trials.push({
-                searchType:
-                condition.searchType,
+                for (let i = 0; i < 10; i++) {
 
-                soundCondition:
-                condition.soundCondition
+                    trials.push({
+                        searchType:
+                        condition.searchType,
+
+                        soundCondition:
+                        condition.soundCondition
+                    });
+                }
+
             });
+
         }
     });
 
@@ -299,40 +308,91 @@ function downloadCSV(
     group
 ) {
 
-    const headers = [
-        "Gruppe",
-        "Versuch",
-        "Suchtyp",
-        "AudioTyp",
-        "Reaktionszeit_ms",
-        "Korrekt"
-    ];
+    const blockGroups = [];
 
-    const rows = results.map((entry) => [
+    for (let i = 0; i < results.length; i += 10) {
 
-        group,
+        blockGroups.push(
+            results.slice(i, i + 10)
+        );
+    }
+    const rows = [];
 
-        entry.trialNumber,
+    blockGroups.forEach((block, index) => {
+        rows.push([
+            `Block ${index + 1}`
+        ]);
 
-        entry.searchType === "praeattentiv"
-            ? "Praeattentiv"
-            : "Attentiv",
+        rows.push([
+            "Trial",
+            "Suchtyp",
+            "Audio",
+            "Zeit(ms)",
+            "Richtig"
+        ]);
 
-        entry.soundCondition === "mit_netzbrummen"
-            ? "Brummen"
-            : "Still",
+        block.forEach((entry, trialIndex) => {
 
-        entry.reactionTime,
+            rows.push([
 
-        entry.correct
-            ? 1
-            : 0
-    ]);
+                trialIndex + 1,
 
-    const csvContent = [
-        headers.join(";"),
-        ...rows.map((row) => row.join(";"))
-    ].join("\n");
+                entry.searchType === "praeattentiv"
+                    ? "Praeattentiv"
+                    : "Attentiv",
+
+                entry.soundCondition === "mit_netzbrummen"
+                    ? "Brummen"
+                    : "Still",
+
+                entry.reactionTime,
+
+                entry.correct ? 1 : 0
+            ]);
+        });
+
+        const totalTime =
+            block.reduce(
+                (sum, entry) =>
+                    sum + entry.reactionTime,
+                0
+            );
+
+        const averageTime =
+            Math.round(
+                totalTime / block.length
+            );
+
+        const correctCount =
+            block.filter(
+                entry => entry.correct
+            ).length;
+
+        rows.push([]);
+
+        rows.push([
+            "Gesamtzeit",
+            totalTime
+        ]);
+
+        rows.push([
+            "Durchschnitt",
+            averageTime
+        ]);
+
+        rows.push([
+            "Richtig",
+            `${correctCount} von 10`
+        ]);
+
+        rows.push([]);
+        rows.push([]);
+    });
+
+    const csvContent =
+        rows
+            .map(row => row.join(";"))
+            .join("\n");
 
     const blob = new Blob(
         [csvContent],
@@ -342,10 +402,10 @@ function downloadCSV(
     const now = new Date();
 
     const fileName =
-        `HCI2_Gruppe${group}_` +
-        `${now.getFullYear()}-` +
+        `HCI1_Gruppe${group}_` +
+        `${String(now.getDate()).padStart(2, "0")}-` +
         `${String(now.getMonth() + 1).padStart(2, "0")}-` +
-        `${String(now.getDate()).padStart(2, "0")}_` +
+        `${now.getFullYear()}_` +
         `${String(now.getHours()).padStart(2, "0")}-` +
         `${String(now.getMinutes()).padStart(2, "0")}-` +
         `${String(now.getSeconds()).padStart(2, "0")}.csv`;
@@ -443,6 +503,14 @@ export default function App() {
     const [selectedGroup, setSelectedGroup] =
         useState(null);
 
+    const [pauseTime, setPauseTime] =
+        useState(30);
+
+    const [pauseProgress, setPauseProgress] = useState(30);
+
+    const [pauseDone, setPauseDone] =
+        useState(false);
+
     const humAudioRef =
         useRef(null);
 
@@ -514,6 +582,54 @@ export default function App() {
 
     }, [experimentPlan, phase, trialIndex]);
 
+    useEffect(() => {
+
+        if (phase !== "pause") {
+            return;
+        }
+
+        const duration = 30000;
+        const start = Date.now();
+
+        const interval = setInterval(() => {
+
+            const elapsed =
+                Date.now() - start;
+
+            const remaining =
+                Math.max(
+                    0,
+                    duration - elapsed
+                );
+
+            setPauseProgress(
+                remaining / 1000
+            );
+
+            setPauseTime(
+                Math.ceil(
+                    remaining / 1000
+                )
+            );
+
+            if (remaining <= 0) {
+
+                clearInterval(interval);
+
+                setPauseDone(true);
+
+                setPauseTime(30);
+
+                setPauseProgress(30);
+
+                setPhase("fixation");
+            }
+
+        }, 50);
+
+        return () => clearInterval(interval);
+
+    }, [phase]);
 
     async function ensureAudioReady() {
 
@@ -676,6 +792,18 @@ export default function App() {
         setTrialIndex(
             nextTrialIndex
         );
+
+        if (
+            nextTrialIndex === 40 &&
+            !pauseDone
+        ) {
+
+            stopHum();
+
+            setPhase("pause");
+
+            return;
+        }
 
         if (
             nextTrialIndex >=
@@ -913,6 +1041,89 @@ export default function App() {
                         </tbody>
 
                     </table>
+
+                </div>
+            </div>
+        );
+    }
+
+    if (phase === "pause") {
+
+        const radius = 90;
+
+        const circumference =
+            2 * Math.PI * radius;
+
+        const progress =
+            pauseProgress / 30;
+
+        const dashOffset =
+            circumference * (1 - progress);
+
+        return (
+            <div style={pageStyle}>
+                <p
+                    style={{
+                        color: "white",
+                        marginTop: 20
+                    }}
+                >
+                    Eine kleine Pause! Gleich geht's weiter..!
+                </p>
+                <div
+                    style={{
+                        position: "relative",
+                        width: 250,
+                        height: 250
+                    }}
+                >
+
+                    <svg
+                        width="250"
+                        height="250"
+                    >
+
+                        <circle
+                            cx="125"
+                            cy="125"
+                            r={radius}
+                            stroke="#444"
+                            strokeWidth="12"
+                            fill="none"
+                        />
+
+                        <circle
+                            cx="125"
+                            cy="125"
+                            r={radius}
+                            stroke="#4caf50"
+                            strokeWidth="12"
+                            fill="none"
+                            strokeDasharray={circumference}
+                            strokeDashoffset={dashOffset}
+                            transform="rotate(-90 125 125)"
+                            style={{
+                                transition:
+                                    "stroke-dashoffset 0.05s linear"
+                            }}
+                        />
+
+                    </svg>
+
+                    <div
+                        style={{
+                            position: "absolute",
+                            inset: 0,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: 64,
+                            color: "white",
+                            fontWeight: "bold"
+                        }}
+                    >
+                        {pauseTime}
+                    </div>
 
                 </div>
             </div>
