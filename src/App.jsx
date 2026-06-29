@@ -303,106 +303,91 @@ function formatSearchLabel(searchType) {
         : "Attentiv";
 }
 
-function downloadCSV(
-    results,
-    group
-) {
+function downloadCSV({
+                         results,
+                         group,
+                         participantId,
+                         preAnswers,
+                         postAnswers
+                     }) {
 
-    const blockGroups = [];
+    // Tidy long format: eine Zeile pro Trial, damit sich
+    // die Daten direkt mit pandas auswerten lassen.
+    const TRIALS_PER_BLOCK = 10;
 
-    for (let i = 0; i < results.length; i += 10) {
+    // Feste Spaltenstruktur (für alle Teilnehmer identisch)
+    const header = [
+        "teilnehmer_id",
+        "gruppe",
+        ...PRE_QUESTIONS.map(question => question.id),
+        ...POST_QUESTIONS.map(question => question.id),
+        "block",
+        "trial_in_block",
+        "trial_global",
+        "suchtyp",
+        "audio",
+        "zeit_ms",
+        "richtig"
+    ];
 
-        blockGroups.push(
-            results.slice(i, i + 10)
+    // Fragebogen-Antworten werden pro Trial-Zeile wiederholt
+    const preValues =
+        PRE_QUESTIONS.map(question =>
+            getAnswerValue(question, preAnswers)
         );
-    }
-    const rows = [];
 
-    blockGroups.forEach((block, index) => {
-        rows.push([
-            `Block ${index + 1}`
-        ]);
+    const postValues =
+        POST_QUESTIONS.map(question =>
+            getAnswerValue(question, postAnswers)
+        );
 
-        rows.push([
-            "Trial",
-            "Suchtyp",
-            "Audio",
-            "Zeit(ms)",
-            "Richtig"
-        ]);
+    const rows = [header];
 
-        block.forEach((entry, trialIndex) => {
+    results.forEach(entry => {
 
-            rows.push([
+        const block =
+            Math.floor(
+                (entry.trialNumber - 1) / TRIALS_PER_BLOCK
+            ) + 1;
 
-                trialIndex + 1,
-
-                entry.searchType === "praeattentiv"
-                    ? "Praeattentiv"
-                    : "Attentiv",
-
-                entry.soundCondition === "mit_netzbrummen"
-                    ? "Brummen"
-                    : "Still",
-
-                entry.reactionTime,
-
-                entry.correct ? 1 : 0
-            ]);
-        });
-
-        const totalTime =
-            block.reduce(
-                (sum, entry) =>
-                    sum + entry.reactionTime,
-                0
-            );
-
-        const averageTime =
-            Math.round(
-                totalTime / block.length
-            );
-
-        const correctCount =
-            block.filter(
-                entry => entry.correct
-            ).length;
-
-        rows.push([]);
+        const trialInBlock =
+            ((entry.trialNumber - 1) % TRIALS_PER_BLOCK) + 1;
 
         rows.push([
-            "Gesamtzeit",
-            totalTime
+            participantId,
+            group,
+            ...preValues,
+            ...postValues,
+            block,
+            trialInBlock,
+            entry.trialNumber,
+            entry.searchType,
+            entry.soundCondition,
+            entry.reactionTime,
+            entry.correct ? 1 : 0
         ]);
-
-        rows.push([
-            "Durchschnitt",
-            averageTime
-        ]);
-
-        rows.push([
-            "Richtig",
-            `${correctCount} von 10`
-        ]);
-
-        rows.push([]);
-        rows.push([]);
     });
 
     const csvContent =
         rows
-            .map(row => row.join(";"))
+            .map(row =>
+                row
+                    .map(escapeCSV)
+                    .join(",")
+            )
             .join("\n");
 
+    // UTF-8 BOM voranstellen, damit Excel/LibreOffice die
+    // Umlaute (ä, ö, ü, ß ...) korrekt als UTF-8 erkennen.
     const blob = new Blob(
-        [csvContent],
+        ["\uFEFF" + csvContent],
         { type: "text/csv;charset=utf-8;" }
     );
 
     const now = new Date();
 
     const fileName =
-        `HCI1_Gruppe${group}_` +
+        `HCI1_Gruppe${group}_ID-${participantId}_` +
         `${String(now.getDate()).padStart(2, "0")}-` +
         `${String(now.getMonth() + 1).padStart(2, "0")}-` +
         `${now.getFullYear()}_` +
@@ -480,10 +465,665 @@ function renderShape(item, size) {
 
     return null;
 }
+function generateParticipantId() {
+
+    // Mehrdeutige Zeichen (0/O, 1/I) bewusst weggelassen
+    const chars =
+        "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+    let id = "";
+
+    for (let i = 0; i < 8; i++) {
+
+        id +=
+            chars[
+                Math.floor(
+                    Math.random() * chars.length
+                )
+                ];
+    }
+
+    return `${id.slice(0, 4)}-${id.slice(4)}`;
+}
+
+// Vorfragebogen (zu Beginn)
+const PRE_QUESTIONS = [
+    {
+        id: "alter",
+        label: "Alter",
+        type: "text",
+        required: true,
+        placeholder: "Dein Alter"
+    },
+    {
+        id: "geschlecht",
+        label: "Geschlecht",
+        type: "radio",
+        required: true,
+        options: [
+            "Divers",
+            "Weiblich",
+            "Männlich",
+            "Keine Angaben"
+        ],
+        other: true
+    },
+    {
+        id: "ohrenkrankheiten",
+        label: "Hast du bekannte Ohrenkrankheiten?",
+        type: "radio",
+        required: true,
+        options: ["Ja", "Nein"]
+    },
+    {
+        id: "ohrenkrankheiten_welche",
+        label: "Welche Ohrenerkrankungen",
+        type: "text",
+        required: false,
+        placeholder: "z. B. Tinnitus",
+        showIf: answers =>
+            answers.ohrenkrankheiten === "Ja"
+    },
+    {
+        id: "arbeitsplatz_laut",
+        label: "Wie laut ist dein Arbeitsplatz?",
+        type: "scale",
+        required: true,
+        min: 1,
+        max: 5,
+        minLabel: "Leise",
+        maxLabel: "Laut"
+    },
+    {
+        id: "bueromaschinen",
+        label:
+            "Wie viel arbeitest du mit elektrischen " +
+            "Bürogeräten (PC, Tablet, etc.)",
+        type: "scale",
+        required: true,
+        min: 1,
+        max: 5,
+        minLabel: "Wenig",
+        maxLabel: "Viel"
+    },
+    {
+        id: "haushaltsgeraete",
+        label:
+            "Wie viel arbeitest du mit elektrischen " +
+            "Haushaltsgeräten (Waschmaschinen, Mixer, " +
+            "Herd, etc.)",
+        type: "scale",
+        required: true,
+        min: 1,
+        max: 5,
+        minLabel: "Wenig",
+        maxLabel: "Viel"
+    },
+    {
+        id: "baumaschinen",
+        label:
+            "Wie viel arbeitest du mit elektrischen " +
+            "Baumaschinen (Bohrmaschinen, Hydraulikpressen, " +
+            "Kompressoren, etc.)",
+        type: "scale",
+        required: true,
+        min: 1,
+        max: 5,
+        minLabel: "Wenig",
+        maxLabel: "Viel"
+    },
+    {
+        id: "noise_cancelling",
+        label:
+            "Wie viel trägst du Noise-Cancelling Kopfhörer?",
+        type: "scale",
+        required: true,
+        min: 1,
+        max: 10,
+        minLabel: "Nie",
+        maxLabel: "Immer"
+    }
+];
+
+// Nachfragebogen (am Ende)
+const POST_QUESTIONS = [
+    {
+        id: "anstrengung",
+        label:
+            "Wie anstrengend empfandest du die " +
+            "Suchaufgaben insgesamt?",
+        type: "radio",
+        required: true,
+        options: [
+            "Gar nicht",
+            "Eher nicht",
+            "Mittelmäßig",
+            "Eher anstregend",
+            "Sehr anstregend"
+        ]
+    },
+    {
+        id: "schwierige_aufgaben",
+        label:
+            "Welche Suchaufgaben empfandest du als schwierig?",
+        type: "radio",
+        required: true,
+        options: [
+            "Präattentive Aufgaben",
+            "Attentive Aufgaben",
+            "Gleich schwer"
+        ]
+    },
+    {
+        id: "brummen_einfluss",
+        label:
+            "Wie stark hat dich das Netzbrummen während " +
+            "der Aufgaben beeinflusst?",
+        type: "radio",
+        required: true,
+        options: [
+            "Gar nicht",
+            "Eher nicht",
+            "Mittelmäßig",
+            "Eher beeinflusst",
+            "Sehr stark beeinflust"
+        ]
+    },
+    {
+        id: "brummen_hinsicht",
+        label:
+            "In welcher Hinsicht hat dich das Netzbrummen " +
+            "beeinflusst?",
+        type: "radio",
+        required: true,
+        options: [
+            "Gar nicht",
+            "Leicht abgelenkt",
+            "Gestresst",
+            "Genervt",
+            "Konzentration verbessert"
+        ],
+        other: true
+    },
+    {
+        id: "gefuehl_langsamer",
+        label:
+            "Hattest du das Gefühl, mit Netzbrummen " +
+            "langsamer zu sein?",
+        type: "radio",
+        required: true,
+        options: ["Ja", "Nein", "Unsicher"]
+    },
+    {
+        id: "gefuehl_fehler",
+        label:
+            "Hattest du das Gefühl, mit Netzbrummen " +
+            "mehr Fehler zu machen?",
+        type: "radio",
+        required: true,
+        options: ["Ja", "Nein", "Unsicher"]
+    },
+    {
+        id: "lautstaerke",
+        label:
+            "Wie angenehm war die Lautstärke des Tons?",
+        type: "radio",
+        required: true,
+        options: [
+            "Zu leise",
+            "Eher zu leise",
+            "Angenehem",
+            "Eher zu laut",
+            "Zu laut"
+        ]
+    },
+    {
+        id: "bewusst_wahrgenommen",
+        label:
+            "Hast du das Netzbrummen während des " +
+            "Experiments bewusst wahrgenommen?",
+        type: "radio",
+        required: true,
+        options: [
+            "Gar nicht",
+            "Selten",
+            "Gelegentlich",
+            "Häufig",
+            "Die ganze Zeit"
+        ]
+    },
+    {
+        id: "strategie",
+        label:
+            "Welche Strategie hast du beim Suchen verwendet?",
+        type: "radio",
+        required: true,
+        options: [
+            "Zielobjekt sprang sofort ins Auge",
+            "Ich habe systematisch gesucht",
+            "Mischung aus beiden",
+            "Keine bestimmte Strategie"
+        ],
+        other: true
+    }
+];
+
+const OTHER_VALUE = "__other__";
+
+function isQuestionVisible(question, answers) {
+
+    return (
+        !question.showIf ||
+        question.showIf(answers)
+    );
+}
+
+function getAnswerValue(question, answers) {
+
+    const value = answers[question.id];
+
+    if (value === OTHER_VALUE) {
+
+        const otherText =
+            answers[`${question.id}_other`] || "";
+
+        return `Sonstiges: ${otherText}`;
+    }
+
+    return value ?? "";
+}
+
+function escapeCSV(value) {
+
+    const text = String(value ?? "");
+
+    if (/[",\n]/.test(text)) {
+
+        return `"${text.replace(/"/g, '""')}"`;
+    }
+
+    return text;
+}
+
+function Questionnaire({
+                           title,
+                           description,
+                           questions,
+                           answers,
+                           onChange,
+                           onSubmit,
+                           submitLabel
+                       }) {
+
+    const [showError, setShowError] =
+        useState(false);
+
+    const visibleQuestions =
+        questions.filter(
+            question =>
+                isQuestionVisible(question, answers)
+        );
+
+    function isAnswered(question) {
+
+        const value = answers[question.id];
+
+        if (
+            value === undefined ||
+            value === null ||
+            value === ""
+        ) {
+            return false;
+        }
+
+        if (value === OTHER_VALUE) {
+
+            return Boolean(
+                answers[`${question.id}_other`] &&
+                answers[`${question.id}_other`].trim()
+            );
+        }
+
+        return true;
+    }
+
+    function handleSubmit() {
+
+        const incomplete =
+            visibleQuestions.some(
+                question =>
+                    question.required &&
+                    !isAnswered(question)
+            );
+
+        if (incomplete) {
+
+            setShowError(true);
+
+            return;
+        }
+
+        setShowError(false);
+
+        onSubmit();
+    }
+
+    return (
+        <div style={pageStyle}>
+            <div
+                style={{
+                    ...cardStyle,
+                    maxWidth: 720,
+                    textAlign: "left"
+                }}
+            >
+
+                <h1 style={{ textAlign: "center" }}>
+                    {title}
+                </h1>
+
+                {description && (
+                    <p
+                        style={{
+                            marginTop: 16,
+                            marginBottom: 8,
+                            lineHeight: 1.6,
+                            opacity: 0.85,
+                            whiteSpace: "pre-line"
+                        }}
+                    >
+                        {description}
+                    </p>
+                )}
+
+                {visibleQuestions.map(question => {
+
+                    const missing =
+                        showError &&
+                        question.required &&
+                        !isAnswered(question);
+
+                    return (
+                        <div
+                            key={question.id}
+                            style={{
+                                marginTop: 26,
+                                paddingTop: 18,
+                                borderTop:
+                                    "1px solid #2a2c34"
+                            }}
+                        >
+
+                            <label
+                                style={{
+                                    display: "block",
+                                    marginBottom: 12,
+                                    fontWeight: 600,
+                                    color: missing
+                                        ? "#ff8a80"
+                                        : "white"
+                                }}
+                            >
+                                {question.label}
+                                {question.required && (
+                                    <span
+                                        style={{
+                                            color: "#ff5252",
+                                            marginLeft: 4
+                                        }}
+                                    >
+                                        *
+                                    </span>
+                                )}
+                            </label>
+
+                            {question.type === "text" && (
+                                <input
+                                    type="text"
+                                    value={
+                                        answers[question.id] ||
+                                        ""
+                                    }
+                                    placeholder={
+                                        question.placeholder ||
+                                        ""
+                                    }
+                                    onChange={event =>
+                                        onChange(
+                                            question.id,
+                                            event.target.value
+                                        )
+                                    }
+                                    style={inputStyle}
+                                />
+                            )}
+
+                            {question.type === "scale" && (
+                                <div
+                                    style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 8,
+                                        flexWrap: "wrap"
+                                    }}
+                                >
+                                    <span
+                                        style={{
+                                            opacity: 0.7,
+                                            minWidth: 50
+                                        }}
+                                    >
+                                        {question.minLabel}
+                                    </span>
+
+                                    {Array.from(
+                                        {
+                                            length:
+                                                question.max -
+                                                question.min +
+                                                1
+                                        },
+                                        (_, i) =>
+                                            question.min + i
+                                    ).map(number => {
+
+                                        const selected =
+                                            answers[question.id] ===
+                                            number;
+
+                                        return (
+                                            <button
+                                                key={number}
+                                                type="button"
+                                                onClick={() =>
+                                                    onChange(
+                                                        question.id,
+                                                        number
+                                                    )
+                                                }
+                                                style={{
+                                                    ...scaleButtonStyle,
+                                                    background:
+                                                        selected
+                                                            ? "#4caf50"
+                                                            : "#2a2c34",
+                                                    borderColor:
+                                                        selected
+                                                            ? "#4caf50"
+                                                            : "#555"
+                                                }}
+                                            >
+                                                {number}
+                                            </button>
+                                        );
+                                    })}
+
+                                    <span
+                                        style={{
+                                            opacity: 0.7,
+                                            minWidth: 50
+                                        }}
+                                    >
+                                        {question.maxLabel}
+                                    </span>
+                                </div>
+                            )}
+
+                            {question.type === "radio" && (
+                                <div
+                                    style={{
+                                        display: "flex",
+                                        flexDirection: "column",
+                                        gap: 8
+                                    }}
+                                >
+                                    {question.options.map(
+                                        option => {
+
+                                            const selected =
+                                                answers[
+                                                    question.id
+                                                    ] === option;
+
+                                            return (
+                                                <label
+                                                    key={option}
+                                                    style={{
+                                                        ...optionStyle,
+                                                        borderColor:
+                                                            selected
+                                                                ? "#4caf50"
+                                                                : "#3a3c44"
+                                                    }}
+                                                >
+                                                    <input
+                                                        type="radio"
+                                                        name={
+                                                            question.id
+                                                        }
+                                                        checked={
+                                                            selected
+                                                        }
+                                                        onChange={() =>
+                                                            onChange(
+                                                                question.id,
+                                                                option
+                                                            )
+                                                        }
+                                                    />
+                                                    {option}
+                                                </label>
+                                            );
+                                        }
+                                    )}
+
+                                    {question.other && (
+                                        <label
+                                            style={{
+                                                ...optionStyle,
+                                                borderColor:
+                                                    answers[
+                                                        question.id
+                                                        ] ===
+                                                    OTHER_VALUE
+                                                        ? "#4caf50"
+                                                        : "#3a3c44",
+                                                alignItems:
+                                                    "center"
+                                            }}
+                                        >
+                                            <input
+                                                type="radio"
+                                                name={question.id}
+                                                checked={
+                                                    answers[
+                                                        question.id
+                                                        ] ===
+                                                    OTHER_VALUE
+                                                }
+                                                onChange={() =>
+                                                    onChange(
+                                                        question.id,
+                                                        OTHER_VALUE
+                                                    )
+                                                }
+                                            />
+                                            Sonstiges:
+                                            <input
+                                                type="text"
+                                                value={
+                                                    answers[
+                                                        `${question.id}_other`
+                                                        ] || ""
+                                                }
+                                                onChange={event => {
+                                                    onChange(
+                                                        question.id,
+                                                        OTHER_VALUE
+                                                    );
+                                                    onChange(
+                                                        `${question.id}_other`,
+                                                        event.target
+                                                            .value
+                                                    );
+                                                }}
+                                                style={{
+                                                    ...inputStyle,
+                                                    marginLeft: 8,
+                                                    flex: 1,
+                                                    marginTop: 0
+                                                }}
+                                            />
+                                        </label>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
+
+                {showError && (
+                    <p
+                        style={{
+                            color: "#ff5252",
+                            marginTop: 20
+                        }}
+                    >
+                        Bitte beantworte alle mit *
+                        markierten Pflichtfragen.
+                    </p>
+                )}
+
+                <button
+                    type="button"
+                    onClick={handleSubmit}
+                    style={{
+                        ...buttonStyle,
+                        marginTop: 28,
+                        background: "#4caf50",
+                        border: "1px solid #4caf50"
+                    }}
+                >
+                    {submitLabel}
+                </button>
+            </div>
+        </div>
+    );
+}
+
 export default function App() {
 
     const [phase, setPhase] =
-        useState("intro");
+        useState("prequestionnaire");
+
+    const [participantId] =
+        useState(generateParticipantId);
+
+    const [preAnswers, setPreAnswers] =
+        useState({});
+
+    const [postAnswers, setPostAnswers] =
+        useState({});
 
     const [trialIndex, setTrialIndex] =
         useState(0);
@@ -698,6 +1338,35 @@ export default function App() {
         setPhase("trial");
     }
 
+    function updatePreAnswer(id, value) {
+
+        setPreAnswers(previous => ({
+            ...previous,
+            [id]: value
+        }));
+    }
+
+    function updatePostAnswer(id, value) {
+
+        setPostAnswers(previous => ({
+            ...previous,
+            [id]: value
+        }));
+    }
+
+    function handleFinishPostQuestionnaire() {
+
+        downloadCSV({
+            results,
+            group: selectedGroup,
+            participantId,
+            preAnswers,
+            postAnswers
+        });
+
+        setPhase("results");
+    }
+
     async function handleStartExperiment() {
 
         const audioReady =
@@ -812,21 +1481,57 @@ export default function App() {
 
             stopHum();
 
-            downloadCSV(
-                nextResults,
-                selectedGroup
-            );
-
             setTrial(null);
 
             setStartTime(null);
 
-            setPhase("results");
+            setPhase("postquestionnaire");
 
             return;
         }
 
         setPhase("fixation");
+    }
+
+    if (phase === "prequestionnaire") {
+
+        return (
+            <Questionnaire
+                title="Vorfragebogen"
+                description={
+                    "Bitte beantworte zunächst einige Fragen " +
+                    "zu deiner Person. Erst danach beginnt das " +
+                    "Experiment."
+                }
+                questions={PRE_QUESTIONS}
+                answers={preAnswers}
+                onChange={updatePreAnswer}
+                onSubmit={() => setPhase("intro")}
+                submitLabel="Weiter"
+            />
+        );
+    }
+
+    if (phase === "postquestionnaire") {
+
+        return (
+            <Questionnaire
+                title="Nachfragebogen – Visuelle Suche Experiment"
+                description={
+                    'Das "Netzbrummen" ist der Ton der ' +
+                    "abgespielt wurde (50hz Ton)\n" +
+                    "Präattentiv = Genau ein Merkmal unterschied " +
+                    "(meistens schneller find bar)\n" +
+                    "Attentiv = Mehr los auf ein Feld " +
+                    "(genaueres Suchen erforderlich)"
+                }
+                questions={POST_QUESTIONS}
+                answers={postAnswers}
+                onChange={updatePostAnswer}
+                onSubmit={handleFinishPostQuestionnaire}
+                submitLabel="Abschließen & CSV speichern"
+            />
+        );
     }
 
     if (phase === "intro") {
@@ -949,6 +1654,46 @@ export default function App() {
                     <h1>
                         Ergebnisse
                     </h1>
+
+                    <div
+                        style={{
+                            margin: "16px 0 24px",
+                            padding: "16px 20px",
+                            border: "1px solid #4caf50",
+                            borderRadius: 10,
+                            background: "#1d2a1f",
+                            textAlign: "center"
+                        }}
+                    >
+                        <div
+                            style={{
+                                opacity: 0.8,
+                                fontSize: 14
+                            }}
+                        >
+                            Deine Teilnehmer-ID
+                        </div>
+                        <div
+                            style={{
+                                fontSize: 32,
+                                fontWeight: "bold",
+                                letterSpacing: 2,
+                                marginTop: 4
+                            }}
+                        >
+                            {participantId}
+                        </div>
+                        <div
+                            style={{
+                                opacity: 0.7,
+                                fontSize: 12,
+                                marginTop: 6
+                            }}
+                        >
+                            Die CSV-Datei mit allen Antworten und
+                            Messdaten wurde gespeichert.
+                        </div>
+                    </div>
 
                     <table
                         style={tableStyle}
@@ -1249,6 +1994,38 @@ const buttonStyle = {
     border: "1px solid #ccc",
     background: "black",
     color: "white"
+};
+
+const inputStyle = {
+    width: "100%",
+    boxSizing: "border-box",
+    padding: "10px 12px",
+    marginTop: 4,
+    borderRadius: 6,
+    border: "1px solid #555",
+    background: "#2a2c34",
+    color: "white",
+    fontSize: 15
+};
+
+const scaleButtonStyle = {
+    width: 40,
+    height: 40,
+    borderRadius: 6,
+    border: "1px solid #555",
+    color: "white",
+    cursor: "pointer",
+    fontSize: 15
+};
+
+const optionStyle = {
+    display: "flex",
+    gap: 10,
+    alignItems: "center",
+    padding: "10px 12px",
+    borderRadius: 8,
+    border: "1px solid #3a3c44",
+    cursor: "pointer"
 };
 
 const tableStyle = {
